@@ -1,0 +1,137 @@
+<form version="1.1" script="dashrunner:dashboard.js">
+  <label>Dashrunner dashboards</label>
+  <description>Shows dashboards that contain dashrunner tokens combined with the savedsearches that run them</description>
+  <fieldset submitButton="false">
+  </fieldset>
+  <row><panel><html><a href="https://splunkbase.splunk.com/app/7397" target="_blank">For documentation, please go to the Splunkbase page</a></html></panel></row>
+  <row rejects="$validatedashrunnerid$,$rundashrunnerid$">
+    <panel>
+      <table id="dashrunner_table1">
+        <search>
+          <query>| rest splunk_server=local "/servicesNS/-/-/data/ui/views" search="dashrunner"
+| rex field="eai:data" max_match=1000 "\"dashrunner_(?&lt;GroupID&gt;[^_]+)_id\"\&gt;(?&lt;DashrunnerID&gt;[^\&lt;]+)\&lt;"
+| eval cmd = mvzip(GroupID, DashrunnerID,"###")
+| fields cmd title label eai:acl.app
+| mvexpand cmd
+| rex field=cmd "(?&lt;GroupID&gt;.+)###(?&lt;DashrunnerID&gt;.+)"
+| stats count by title label eai:acl.app DashrunnerID
+| eval dashboard_url = 'eai:acl.app' + "/" + title
+| eval href = "&lt;a href=\"/app/"+ dashboard_url + "\" target=\"_blank\"&gt;" + label + if(count > 1, "(" + count + ")", "") + "&lt;/a&gt;"
+
+| append [
+  | rest splunk_server="local" "/servicesNS/-/-/saved/searches" search="dashrunner"
+  | rex field="search" "dashrunner.*?id *= *\"?(?&lt;DashrunnerID&gt;[^\"\s]+)"
+  | eval ss_url = "/manager/" + 'eai:acl.app' + "/saved/searches?app=" + 'eai:acl.app' + "&amp;count=100&amp;offset=0&amp;itemType=&amp;owner=&amp;search=" + title
+  | eval ss_label = title + if(disabled=1," (Disabled)","") + if(is_scheduled=0," (Unscheduled)","")
+  | eval ss_url = "&lt;a href='" + ss_url + "' target='_blank'&gt;" + ss_label + "&lt;/a&gt;"
+  | stats values(ss_url) as ss_url by DashrunnerID
+  | eval ss_url = "html:" + mvjoin(ss_url, ", ")]
+
+| stats dc(dashboard_url) as DashboardCount sum(count) as SearchCount values(ss_url) as SavedSearch list(href) as Dashboards by DashrunnerID
+| eval Dashboards = "html:" + mvjoin(Dashboards, "
+")
+| eval validatetokens_as_json = json_object("validatedashrunnerid", DashrunnerID)
+| eval runtokens_as_json = json_object("rundashrunnerid", DashrunnerID)
+| eval runnow_url = "search?q=%7C%20dashrunner%20id%3D%22" + DashrunnerID + "%22%20testmode%3Df"
+```| eval " " = "html:" + `sonic_build_minibutton("\"Validate\"","\"arrow-down\"",validatetokens_as_json)` + "  " + `sonic_build_minibutton("\"Test run\"","\"arrow-down\"",runtokens_as_json)` ```
+
+| eval " " = "html:&lt;a class='btn btn-mini' title='Validate' href='#' data-token-json='" + replace(validatetokens_as_json, "'", "&#39;") + "'&gt;&lt;i class=\"icon-arrow-down\"&gt;&lt;/i&gt; Validate&lt;/a&gt; &lt;a class='btn btn-mini' title='Test run' href='#' data-token-json='" + replace(runtokens_as_json, "'", "&#39;") + "'&gt;&lt;i class=\"icon-arrow-down\"&gt;&lt;/i&gt; Test run&lt;/a&gt;"
+
+| table DashrunnerID " " SavedSearch DashboardCount SearchCount Dashboards</query>
+          <earliest>-15m</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+      </table>
+    </panel>
+  </row>
+  <row depends="$validatedashrunnerid$">
+    <panel>
+      <html>
+      <h3>ID: $validatedashrunnerid$</h3>
+      <a href="#" data-unset-token="validatedashrunnerid">
+          <i class="icon-arrow-left"/> Back</a>
+    </html>
+    </panel>
+  </row>
+  <row depends="$validatedashrunnerid$">
+    <panel>
+      <table id="dashrunner_table2">
+        <title>Results: $results_count1$</title>
+        <search>
+          <query>
+| dashrunner id="$validatedashrunnerid$" mode="validate" 
+| fillnull value="" object 
+| eval object_href = replace(object, ":.*", "") 
+| eval object_href = "html:&lt;a href='/app/" + object_href + "' target='_blank'&gt;" + object_href + "&lt;/a&gt;" + replace(object, "^[^:]*", "") 
+| rename object_href as object 
+| table _time log_level object message
+            </query>
+          <done><set token="results_count1">$job.resultCount$</set></done>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="log_level">
+          <colorPalette type="map">{"INFO":#118832,"WARN":#D94E17,"ERROR":#D41F1F}</colorPalette>
+        </format>
+      </table>
+    </panel>
+  </row>
+  <row depends="$rundashrunnerid$">
+    <panel>
+      <html>
+      <h3>ID: $rundashrunnerid$</h3>
+      <a href="#" data-unset-token="rundashrunnerid">
+          <i class="icon-arrow-left"/> Back</a>
+    </html>
+    </panel>
+  </row>
+  <row depends="$rundashrunnerid$">
+    <panel>
+      <table id="dashrunner_table3">
+        <title>Results: $results_count3$</title>
+        <search>
+          <query>
+| dashrunner id="$rundashrunnerid$" mode="test"
+| addcoltotals labelfield="dashboard" label="Total" run_duration_sec results
+          </query>
+          <done><set token="results_count3">$job.resultCount$</set></done>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+          <sampleRatio>1</sampleRatio>
+        </search>
+        <option name="count">100</option>
+        <option name="dataOverlayMode">none</option>
+        <option name="drilldown">none</option>
+        <option name="percentagesRow">false</option>
+        <option name="rowNumbers">false</option>
+        <option name="totalsRow">false</option>
+        <option name="wrap">true</option>
+        <format type="color" field="log_level">
+          <colorPalette type="map">{"INFO":#118832,"WARN":#D94E17,"ERROR":#D41F1F}</colorPalette>
+        </format>
+      </table>
+    </panel>
+  </row>  
+</form>
+
+
+
+
+

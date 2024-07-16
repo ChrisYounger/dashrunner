@@ -138,7 +138,7 @@ def dashrunner():
                 group_ids[group_id]["latest"] = ""
                 try:
                     group_ids[group_id]["search_string"], group_ids[group_id]["earliest"], group_ids[group_id]["latest"] = findSearchRecursivly(root, group_ids[group_id]["searchid"])
-                except Exception:
+                except Exception as ex:
                     log_error(str(ex))
                     continue
 
@@ -282,11 +282,13 @@ def dashrunner():
         for t in possible_tokens:
             log_warning("Detected potentially unset token \"" + t + "\" in search string.")
 
+        baseurl = '/servicesNS/' + dr['owner'] + '/' + namespace + '/'
+
         # Parse the search using the parser endpoint.
         if dr['mode'] == "validate":
-            baseurl = '/servicesNS/' + dr['owner'] + '/' + namespace + '/search/v2/parser'
+             
             try:
-                response, content = splunk.rest.simpleRequest(baseurl + '?output_mode=json', sessionKey=dr['session_key'], postargs={'q':searchQuery}, method='POST')
+                response, content = splunk.rest.simpleRequest(baseurl + 'search/v2/parser?output_mode=json', sessionKey=dr['session_key'], postargs={'q':searchQuery}, method='POST')
                 if response.status != 200:
                     log_warning("Parse check of search failed: " + json.loads(content)["messages"][0]["text"])
             except Exception:
@@ -295,8 +297,8 @@ def dashrunner():
                 pass
             return ret
         search_start_time = time.time()
-        baseurl = '/servicesNS/' + dr['owner'] + '/' + namespace + '/search/jobs'
-        response, content = splunk.rest.simpleRequest(baseurl + '?output_mode=json', sessionKey=dr['session_key'], postargs={'search':searchQuery, 'earliest_time': earliest, 'latest_time': latest}, method='POST', rawResult=True)
+
+        response, content = splunk.rest.simpleRequest(baseurl + 'search/jobs?output_mode=json', sessionKey=dr['session_key'], postargs={'search':searchQuery, 'earliest_time': earliest, 'latest_time': latest}, method='POST', rawResult=True)
         if response.status == 400:
             try:
                 log_error("search job failed becuase: " + json.loads(content)["messages"][0]["text"])
@@ -315,7 +317,7 @@ def dashrunner():
         #self.logger.info("Job sid is (" + str(sid) + ")")
         while True:
             # poll every second to see if job is completed
-            response, content = splunk.rest.simpleRequest(baseurl + '/' + str(ret["sid"]) + '/results?output_mode=json', sessionKey=dr['session_key'], rawResult=True)
+            response, content = splunk.rest.simpleRequest(baseurl + 'search/v2/jobs/' + str(ret["sid"]) + '/results?output_mode=json&count=0', sessionKey=dr['session_key'])
             ret["duration"] = time.time() - search_start_time
             if response.status == 200:
                 # got results 
@@ -332,7 +334,7 @@ def dashrunner():
                 if ret["duration"] > maxwait:
                     log_error("search job took too long to run and will be cancelled (maxwait is " + str(maxwait) + "sec and can be overridden using the dashrunner_X_maxwait token")
                     # finalise the job now. instead of cancel, we finalise, but we dont use the results anyway. cancel doesnt seem to actually cancel.
-                    del_response, del_content = splunk.rest.simpleRequest(baseurl + '/' + str(ret["sid"]) + '/control?output_mode=json', sessionKey=dr['session_key'], postargs={'action':'finalize'}, method='POST', rawResult=True)
+                    del_response, del_content = splunk.rest.simpleRequest(baseurl + 'search/jobs/' + str(ret["sid"]) + '/control?output_mode=json', sessionKey=dr['session_key'], postargs={'action':'finalize'}, method='POST', rawResult=True)
                     if del_response.status != 200:
                         log_warning("canceling search job returned unexpected status code (" + str(del_response.status) + "with content (" + str(del_content) + ")")
                     return ret

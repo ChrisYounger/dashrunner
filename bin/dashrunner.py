@@ -132,8 +132,18 @@ def dashrunner():
             dr['logLocation'] = dr['onDashboard'] + ":" + group_id
 
             group_ids[group_id]["search_string"] = ""
+                
+            if group_ids[group_id]["searchid"] == "":
+                if group_ids[group_id]["postprocess"] == "":
+                    log_error("Token \"dashrunner_" + group_id + "_searchid\" OR \"dashrunner_" + group_id + "_postprocess\" must be set.")
+                    continue
+                
+                if not "earliest" in group_ids[group_id]["_seen"]:
+                    log_warning("When the entire search is in the postprocess token, the \"dashrunner_" + group_id + "_earliest\" token should be set (will default to '-1sec').")
+                if not "latest" in group_ids[group_id]["_seen"]:
+                    log_warning("When the entire search is in the postprocess token, the \"dashrunner_" + group_id + "_latest\" token should be set (will default to 'now').")
 
-            if group_ids[group_id]["searchid"] != "":
+            else:
                 group_ids[group_id]["earliest"] = ""
                 group_ids[group_id]["latest"] = ""
                 try:
@@ -155,7 +165,8 @@ def dashrunner():
             # fix occurances of $$ which is how single dollar signs should be quoted
             group_ids[group_id]["search_string"] = group_ids[group_id]["search_string"].replace("$$","$")
 
-            if group_ids[group_id]["postprocess"] != "" and not group_ids[group_id]["postprocess"].startswith("|"):
+            # in between the base search and the postprocess add a pipe
+            if group_ids[group_id]["search_string"] != "" and group_ids[group_id]["postprocess"] != "" and not group_ids[group_id]["postprocess"].startswith("|"):
                 group_ids[group_id]["postprocess"] = "| " + group_ids[group_id]["postprocess"]
 
         # this logic can be uncommented to deal with searches that have the same base search and tokens

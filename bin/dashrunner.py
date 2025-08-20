@@ -101,10 +101,10 @@ def dashrunner():
                 if not token_name_parts[1] in group_ids[group_id]:
                     log_warning("Unknown token \"dashrunner_" + group_id + "_" + token_name_parts[1] + "\".")
                 else: 
-                    if elem.attrib['token'] in group_ids[group_id]["_seen"]:
+                    if token_name_parts[1] in group_ids[group_id]["_seen"]:
                         log_warning("Token appears twice: \"dashrunner_" + group_id + "_" + token_name_parts[1] + "\".")
                     tokensValid[elem.attrib['token']] = val
-                    group_ids[group_id]["_seen"][elem.attrib['token']] = val
+                    group_ids[group_id]["_seen"][token_name_parts[1]] = val
                 if token_name_parts[1] == "maxwait" or token_name_parts[1] == "pause":
                     if val.isdigit():
                         group_ids[group_id][token_name_parts[1]] = int(val)
@@ -355,7 +355,7 @@ def dashrunner():
                 return ret
 
     finalresults = []
-    if dr['dashboards'] is "":
+    if dr['dashboards'] == "":
         log_info("The dashboard= argument was not set. Will query for all dashboards that contain the string: \"dashrunner*id*" + quote_plus(dr['id']) + "\" | rest splunk_server=local /servicesNS/-/-/data/ui/views f=\"eai:data\" search=\"dashrunner*id*" + quote_plus(dr['id']) + "\" count=\"" + dr['max_dashboards'] + "\"")
         try:
             response, content = splunk.rest.simpleRequest("/servicesNS/-/-/data/ui/views?output_mode=json&count=" + dr['max_dashboards'] + "&search=%22dashrunner*" + quote_plus(dr['id']) + "%22", sessionKey=dr['session_key'], rawResult=True)
@@ -372,7 +372,10 @@ def dashrunner():
                     for dashboard_obj in dashboards_json['entry']:
                         dr['onDashboard'] = dashboard_obj['acl']['app'] + "/" + dashboard_obj['name']
                         dr['logLocation'] = dr['onDashboard']
-                        finalresults += process_dashboard(dashboard_obj['acl']['app'], dashboard_obj['name'], dashboard_obj['content']['eai:data'])
+                        if dashboard_obj['acl']['sharing'] != "user" or dr['owner'] == dashboard_obj['acl']['owner']:
+                            finalresults += process_dashboard(dashboard_obj['acl']['app'], dashboard_obj['name'], dashboard_obj['content']['eai:data'])
+                        else:
+                            log_info("Skipping private dashboard owned by " + str(dashboard_obj['acl']['owner']) + " (running as " + str(dr['owner']) + ")")
         except json.JSONDecodeError as ex:
             log_error("unable to parse json of all dashboards " + str(ex))
         except Exception as ex:
